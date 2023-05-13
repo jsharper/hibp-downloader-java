@@ -41,7 +41,7 @@ public class App {
 			} else {
 				if ("-o".equals(arg) || "--overwrite".equals(arg)) {
 					overwriteExisting = true;
-				} else if ("-n".equals(arg)) {
+				} else if ("-n".equals(arg) || "--ntlm-hashes".equals(arg)) {
 					fetchNtlm = true;
 				} else if ("-p".equals(arg) || "--parallelism".equals(arg)) {
 					nextParamNumThreads = true;
@@ -58,9 +58,10 @@ public class App {
 					return;
 				} else if ("--help".equals(arg)) {
 					logger.info("Optional parameters:");
-					logger.info("-n                                              Fetch NTLM instead of SHA1 hashes");
+					logger.info("-n | --ntlm-hashes                              Fetch NTLM instead of SHA1 hashes");
 					logger.info("-p <threadcount> | --parallelism <threadcount>  Set thread count (default: 8)");
 					logger.info("-f <filename> | --filename <filename>           Set output filename (default: pwnedpasswords.txt)");
+					logger.info("-o | --overwrite                                Overwrite output file if it already exists");
 					logger.info("-c <timeout> | --connect-timeout-ms <timeout>   Set connect timeout in milliseconds (default: 500)");
 					logger.info("-r <timeout> | --read-timeout-ms <timeout>      Set read timeout in milliseconds (default: 1500)");
 					logger.info("--trace                                         Enable trace level debugging");
