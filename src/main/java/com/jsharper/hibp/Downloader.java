@@ -4,6 +4,7 @@ import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
 
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -34,7 +35,8 @@ public class Downloader {
 	private static final byte[] CRLF = "\r\n".getBytes();
 
 	private static final long INFO_LOG_EVERY_MS = 1000l * 15;
-	private static final int MAX_BUFFER_SIZE = 2000;
+	private static final int MAX_RANGE_BUFFER_SIZE = 2000;
+	private static final int OUTPUT_BUFFER_SIZE = 1024 * 1024;
 
 	private String filePath;
 	private boolean overwriteExisting;
@@ -61,7 +63,7 @@ public class Downloader {
 	public synchronized void download() throws IOException {
 		logger.info("Downloading to [{}] using {} threads...", filePath, numThreads);
 
-		outFile = Files.newOutputStream(Paths.get(filePath), overwriteExisting ? CREATE : CREATE_NEW, TRUNCATE_EXISTING);
+		outFile = new BufferedOutputStream(Files.newOutputStream(Paths.get(filePath), overwriteExisting ? CREATE : CREATE_NEW, TRUNCATE_EXISTING), OUTPUT_BUFFER_SIZE);
 
 		for (int range = 0; range < numThreads && range <= FINAL_RANGE; range++) {
 			new Thread(new RangeWorker(range, fetchNtlm)).start();
@@ -129,7 +131,7 @@ public class Downloader {
 
 		Integer nextRange = null;
 		if (lastStartedProcessingRange < FINAL_RANGE) {
-			if (rangeBuffer.size() >= MAX_BUFFER_SIZE) {
+			if (rangeBuffer.size() >= MAX_RANGE_BUFFER_SIZE) {
 				logger.trace("buffer too full.. let's back off until it has some breathing room...");
 				numActiveThreads--;
 				do {
@@ -139,7 +141,7 @@ public class Downloader {
 						logger.warn("wait-for-buffer-to-shrink loop sleep was interrupted!", ie);
 						Thread.currentThread().interrupt();
 					}
-				} while (rangeBuffer.size() >= MAX_BUFFER_SIZE);
+				} while (rangeBuffer.size() >= MAX_RANGE_BUFFER_SIZE);
 				// we're back in the game! let's re-check to see if there's still work to be done...
 				numActiveThreads++;
 				if (lastStartedProcessingRange < FINAL_RANGE) {
