@@ -52,7 +52,7 @@ public class App {
 				} else if ("-r".equals(arg) || "--read-timeout-ms".equals(arg)) {
 					nextParamReadTimeout = true;
 				} else if ("--trace".equals(arg)) {
-					Configurator.setAllLevels(LogManager.getRootLogger().getName(), Level.TRACE);
+					Configurator.setLevel(LogManager.getLogger("com.jsharper"), Level.TRACE);
 				} else if ("--version".equals(arg)) {
 					logger.info("Version: {}", APP_VERSION);
 					return;

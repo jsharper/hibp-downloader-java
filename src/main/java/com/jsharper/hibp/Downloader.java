@@ -34,7 +34,7 @@ public class Downloader {
 	private static final byte[] CRLF = "\r\n".getBytes();
 
 	private static final long INFO_LOG_EVERY_MS = 1000l * 15;
-	private static final int MAX_BUFFER_SIZE = 1000;
+	private static final int MAX_BUFFER_SIZE = 2000;
 
 	private String filePath;
 	private boolean overwriteExisting;
@@ -105,6 +105,7 @@ public class Downloader {
 		if (range == lastWrittenRange + 1) {
 			logger.trace("writing range {} after retrieval", range);
 			outFile.write(data);
+			logger.trace("...done", range);
 			boolean consumedAnyBuffer = false;
 			do {
 				lastWrittenRange = range++;
@@ -113,6 +114,7 @@ public class Downloader {
 					consumedAnyBuffer = true;
 					logger.trace("writing range {} from buffer", range);
 					outFile.write(data);
+					logger.trace("...done", range);
 				}
 			} while (data != null);
 			if (consumedAnyBuffer) {
@@ -122,6 +124,7 @@ public class Downloader {
 		} else {
 			logger.trace("stashing range {} in buffer for later writing", range);
 			rangeBuffer.put(range, data);
+			logger.trace("...done", range);
 		}
 
 		Integer nextRange = null;
@@ -200,6 +203,8 @@ public class Downloader {
 		}
 
 		byte[] getRangeData(int range) throws IOException {
+			long start = System.currentTimeMillis();
+
 			byte[] data;
 			String rangeHex = String.format("%1$05X", range);
 			String url = API_BASE_URL + rangeHex;
@@ -207,6 +212,7 @@ public class Downloader {
 				url += "?mode=ntlm";
 			}
 
+			logger.trace("getRangeData({}) from {}", range, url);
 			HttpGet httpGet = new HttpGet(url);
 			try (CloseableHttpResponse httpResponse = httpClient.execute(httpGet)) { 
 				if (httpResponse.getStatusLine().getStatusCode() == 200) {
@@ -226,8 +232,10 @@ public class Downloader {
 					throw new IOException("Got non-200 response, despite retries! response: [" + httpResponse.getStatusLine().getStatusCode() + "]/[" + httpResponse.getStatusLine().getReasonPhrase() + "]");
 				}
 			}
+			logger.trace("getRangeData({}) returning {} bytes in {}ms", range, data.length, (System.currentTimeMillis() - start));
 			return data;
 		}
+
 		private HttpRequestRetryHandler httpRequestRetryHandler = new HttpRequestRetryHandler() {
 			private final long WAIT_PERIOD_MS = 2000;
 			private final int MAX_RETRIES = 60;
