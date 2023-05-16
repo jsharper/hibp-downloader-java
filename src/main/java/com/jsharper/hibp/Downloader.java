@@ -157,6 +157,8 @@ public class Downloader {
 		return nextRange;
 	}
 
+
+
 	class RangeWorker implements Runnable {
 		private Integer range;
 		private boolean fetchNtlm;
@@ -182,6 +184,7 @@ public class Downloader {
 
 		@Override
 		public void run() {
+			Thread.currentThread().setName("t" + String.format("%03d", range)); // shorten thread name for logging purposes
 			try {
 				do {
 					byte[] data = getRangeData(range);
@@ -190,7 +193,8 @@ public class Downloader {
 				logger.trace("thread done; no more new work to do...");
 				numActiveThreads--;
 			} catch (IOException ioe) {
-				logger.fatal("Encountered an unrecoverable error while working on range " + range + "!", ioe);
+				//logger.trace("Unrecoverable error while working on range {}!", range, ioe);
+				logger.fatal("Unrecoverable error while working on range {}! [{}]/[{}]", range, ioe.getClass().getName(), ioe.getMessage(), ioe);
 				System.exit(1);
 			}
 		}
@@ -207,17 +211,19 @@ public class Downloader {
 			try (CloseableHttpResponse httpResponse = httpClient.execute(httpGet)) { 
 				if (httpResponse.getStatusLine().getStatusCode() == 200) {
 					ByteArrayOutputStream baos = new ByteArrayOutputStream();
-					BufferedReader reader = new BufferedReader(new InputStreamReader(httpResponse.getEntity().getContent()));
-					String line;
-					while ((line = reader.readLine()) != null) {
-						baos.write(rangeHex.getBytes());
-						baos.write(line.getBytes());
-						baos.write(CRLF);
+					try (BufferedReader reader = new BufferedReader(new InputStreamReader(httpResponse.getEntity().getContent()))) {
+						String line;
+						while ((line = reader.readLine()) != null) {
+							baos.write(rangeHex.getBytes());
+							baos.write(line.getBytes());
+							baos.write(CRLF);
+						}
 					}
 
 					data = baos.toByteArray();
 				} else {
-					throw new IOException("Got non-200 response; perhaps a retry will help!" + httpResponse.getStatusLine().getStatusCode());
+					// ServiceUnavailableRetryStrategy must have given up retrying non-200 responses
+					throw new IOException("Got non-200 response, despite retries! response: [" + httpResponse.getStatusLine().getStatusCode() + "]/[" + httpResponse.getStatusLine().getReasonPhrase() + "]");
 				}
 			}
 			return data;
@@ -236,7 +242,7 @@ public class Downloader {
 						Thread.currentThread().interrupt();
 					}
 				}
-				logger.info("HttpRequestRetryHandler executionCount=" + executionCount + " exception: [" + exception.getClass().getName()+ "] retrying: " + ret);
+				logger.info("during try #" + executionCount + " caught exception: [" + exception.getClass().getName()+ "] [" + exception.getMessage() + "]; " + (ret ? "retrying" : "giving up!"));
 				return ret;
 			}
 		};
@@ -247,10 +253,10 @@ public class Downloader {
 
 			@Override
 			public boolean retryRequest(HttpResponse response, int executionCount, HttpContext context) {
-				// let's retry statuses >= 400
-				boolean ret = executionCount <= MAX_RETRIES && response.getStatusLine().getStatusCode() >= 400;
+				// let's retry non-200 responses for a bit
+				boolean ret = executionCount <= MAX_RETRIES && response.getStatusLine().getStatusCode() != 200;
 				if (ret) {
-					logger.info("ServiceUnavailableRetryStrategy executionCount=" + executionCount + " response: [" + response.getStatusLine().getStatusCode() + "] retrying: "+ ret);
+					logger.info("during try #" + executionCount + " received [" + response.getStatusLine().getStatusCode() + "]/[" + response.getStatusLine().getReasonPhrase() + "]; retrying");
 				}
 				return ret;
 			}
