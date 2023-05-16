@@ -16,10 +16,10 @@ public class App {
 	public static void main(String[] args) throws IOException {
 		String filePath = "pwnedpasswords.txt";
 		boolean overwriteExisting = false;
-		int numThreads = 8;
+		int numThreads = 64;
 		boolean fetchNtlm = false;
 		int connTimeoutMs = 500;
-		int readTimeoutMs = 1500;
+		int readTimeoutMs = 2000;
 
 		boolean nextParamFilePath = false;
 		boolean nextParamNumThreads = false;
@@ -59,11 +59,11 @@ public class App {
 				} else if ("--help".equals(arg)) {
 					logger.info("Optional parameters:");
 					logger.info("-n | --ntlm-hashes                              Fetch NTLM instead of SHA1 hashes");
-					logger.info("-p <threadcount> | --parallelism <threadcount>  Set thread count (default: 8)");
+					logger.info("-p <threadcount> | --parallelism <threadcount>  Set thread count (default: 64)");
 					logger.info("-f <filename> | --filename <filename>           Set output filename (default: pwnedpasswords.txt)");
 					logger.info("-o | --overwrite                                Overwrite output file if it already exists");
 					logger.info("-c <timeout> | --connect-timeout-ms <timeout>   Set connect timeout in milliseconds (default: 500)");
-					logger.info("-r <timeout> | --read-timeout-ms <timeout>      Set read timeout in milliseconds (default: 1500)");
+					logger.info("-r <timeout> | --read-timeout-ms <timeout>      Set read timeout in milliseconds (default: 2000)");
 					logger.info("--trace                                         Enable trace level debugging");
 					logger.info("--version                                       Display app version and exit");
 					return;
