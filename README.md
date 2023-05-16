@@ -1,7 +1,7 @@
 # hibp-downloader-java
 Have I Been Pwned (HIBP) Password Hash Downloader (Java)
 
-An alternate (to <https://github.com/HaveIBeenPwned/PwnedPasswordsDownloader>) downloader for HIBP Pwned Password hashes that does not require Windows or .NET.
+An alternate to <https://github.com/HaveIBeenPwned/PwnedPasswordsDownloader> that does not require Windows or .NET.
 
 See <https://haveibeenpwned.com/Passwords>
 
