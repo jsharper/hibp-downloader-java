@@ -42,8 +42,6 @@ public class Downloader {
 	private boolean overwriteExisting;
 	private int numThreads;
 	private boolean fetchNtlm;
-	private int connTimeoutMs;
-	private int readTimeoutMs;
 
 	OutputStream outFile;
 	Map<Integer, byte[]> rangeBuffer = new HashMap<>();
@@ -51,13 +49,27 @@ public class Downloader {
 	int lastWrittenRange = -1;
 	int numActiveThreads = 0;
 
+	private CloseableHttpClient httpClient;
+
 	public Downloader(String filePath, boolean overwriteExisting, int numThreads, boolean fetchNtlm, int connTimeoutMs, int readTimeoutMs) {
 		this.filePath = filePath;
 		this.overwriteExisting = overwriteExisting;
 		this.numThreads = numThreads;
 		this.fetchNtlm = fetchNtlm;
-		this.connTimeoutMs = connTimeoutMs;
-		this.readTimeoutMs = readTimeoutMs;
+
+		RequestConfig defaultRequestConfig = RequestConfig.custom() 
+				.setSocketTimeout(readTimeoutMs)
+				.setConnectTimeout(connTimeoutMs)
+				.build();
+
+		httpClient = HttpClients.custom()
+				.setDefaultRequestConfig(defaultRequestConfig)
+				.setMaxConnPerRoute(2048)
+				.setMaxConnTotal(2048)
+				.setRetryHandler(httpRequestRetryHandler)
+				.setServiceUnavailableRetryStrategy(serviceUnavailableRetryStrategy)
+				.setUserAgent("hibp-downloader-java/" + App.APP_VERSION)
+				.build();
 	}
 
 	public synchronized void download() throws IOException {
@@ -163,28 +175,13 @@ public class Downloader {
 	}
 
 
-
 	class RangeWorker implements Runnable {
 		private Integer range;
 		private boolean fetchNtlm;
 
-		private CloseableHttpClient httpClient;
-
 		RangeWorker(int initialRange, boolean fetchNtlm) {
 			this.range = initialRange;
 			this.fetchNtlm = fetchNtlm;
-
-			RequestConfig defaultRequestConfig = RequestConfig.custom() 
-					.setSocketTimeout(readTimeoutMs)
-					.setConnectTimeout(connTimeoutMs)
-					.build();
-
-			httpClient = HttpClients.custom()
-					.setDefaultRequestConfig(defaultRequestConfig)
-					.setRetryHandler(httpRequestRetryHandler)
-					.setServiceUnavailableRetryStrategy(serviceUnavailableRetryStrategy)
-					.setUserAgent("hibp-downloader-java/" + App.APP_VERSION)
-					.build();
 		}
 
 		@Override
@@ -237,45 +234,44 @@ public class Downloader {
 			logger.trace("getRangeData({}) returning {} bytes in {}ms", range, data.length, (System.currentTimeMillis() - start));
 			return data;
 		}
-
-		private HttpRequestRetryHandler httpRequestRetryHandler = new HttpRequestRetryHandler() {
-			private final long WAIT_PERIOD_MS = 2000;
-			private final int MAX_RETRIES = 60;
-
-			@Override
-			public boolean retryRequest(IOException exception, int executionCount, HttpContext context) {
-				boolean ret = executionCount <= MAX_RETRIES;
-				if (ret) {
-					try {
-						Thread.sleep(WAIT_PERIOD_MS);
-					} catch (InterruptedException ie) {
-						Thread.currentThread().interrupt();
-					}
-				}
-				logger.info("during try #" + executionCount + " caught exception: [" + exception.getClass().getName()+ "] [" + exception.getMessage() + "]; " + (ret ? "retrying" : "giving up!"));
-				return ret;
-			}
-		};
-
-		private ServiceUnavailableRetryStrategy serviceUnavailableRetryStrategy = new ServiceUnavailableRetryStrategy() {
-			private final long WAIT_PERIOD_MS = 2000;
-			private final int MAX_RETRIES = 60;
-
-			@Override
-			public boolean retryRequest(HttpResponse response, int executionCount, HttpContext context) {
-				// let's retry non-200 responses for a bit
-				boolean ret = executionCount <= MAX_RETRIES && response.getStatusLine().getStatusCode() != 200;
-				if (ret) {
-					logger.info("during try #" + executionCount + " received [" + response.getStatusLine().getStatusCode() + "]/[" + response.getStatusLine().getReasonPhrase() + "]; retrying");
-				}
-				return ret;
-			}
-
-			@Override
-			public long getRetryInterval() {
-				return WAIT_PERIOD_MS;
-			}
-		};
-
 	}
+
+	private HttpRequestRetryHandler httpRequestRetryHandler = new HttpRequestRetryHandler() {
+		private final long WAIT_PERIOD_MS = 2000;
+		private final int MAX_RETRIES = 60;
+
+		@Override
+		public boolean retryRequest(IOException exception, int executionCount, HttpContext context) {
+			boolean ret = executionCount <= MAX_RETRIES;
+			if (ret) {
+				try {
+					Thread.sleep(WAIT_PERIOD_MS);
+				} catch (InterruptedException ie) {
+					Thread.currentThread().interrupt();
+				}
+			}
+			logger.info("during try #" + executionCount + " caught exception: [" + exception.getClass().getName()+ "] [" + exception.getMessage() + "]; " + (ret ? "retrying" : "giving up!"));
+			return ret;
+		}
+	};
+
+	private ServiceUnavailableRetryStrategy serviceUnavailableRetryStrategy = new ServiceUnavailableRetryStrategy() {
+		private final long WAIT_PERIOD_MS = 2000;
+		private final int MAX_RETRIES = 60;
+
+		@Override
+		public boolean retryRequest(HttpResponse response, int executionCount, HttpContext context) {
+			// let's retry non-200 responses for a bit
+			boolean ret = executionCount <= MAX_RETRIES && response.getStatusLine().getStatusCode() != 200;
+			if (ret) {
+				logger.info("during try #" + executionCount + " received [" + response.getStatusLine().getStatusCode() + "]/[" + response.getStatusLine().getReasonPhrase() + "]; retrying");
+			}
+			return ret;
+		}
+
+		@Override
+		public long getRetryInterval() {
+			return WAIT_PERIOD_MS;
+		}
+	};
 }
