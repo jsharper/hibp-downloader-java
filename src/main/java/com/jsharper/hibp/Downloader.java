@@ -204,7 +204,7 @@ public class Downloader {
 		byte[] getRangeData(int range) throws IOException {
 			long start = System.currentTimeMillis();
 
-			byte[] data;
+			byte[] data = null;
 			String rangeHex = String.format("%1$05X", range);
 			String url = API_BASE_URL + rangeHex;
 			if (fetchNtlm) {
@@ -213,22 +213,39 @@ public class Downloader {
 
 			logger.trace("getRangeData({}) from {}", range, url);
 			HttpGet httpGet = new HttpGet(url);
-			try (CloseableHttpResponse httpResponse = httpClient.execute(httpGet)) { 
-				if (httpResponse.getStatusLine().getStatusCode() == 200) {
-					ByteArrayOutputStream baos = new ByteArrayOutputStream();
-					try (BufferedReader reader = new BufferedReader(new InputStreamReader(httpResponse.getEntity().getContent()))) {
-						String line;
-						while ((line = reader.readLine()) != null) {
-							baos.write(rangeHex.getBytes());
-							baos.write(line.getBytes());
-							baos.write(CRLF);
-						}
-					}
+			int tryNum = 1;
+			while (data == null) {
+				try (CloseableHttpResponse httpResponse = httpClient.execute(httpGet)) {
+					if (httpResponse.getStatusLine().getStatusCode() == 200) {
+						try {
+							ByteArrayOutputStream baos = new ByteArrayOutputStream();
+							try (BufferedReader reader = new BufferedReader(new InputStreamReader(httpResponse.getEntity().getContent()))) {
+								String line;
+								while ((line = reader.readLine()) != null) {
+									baos.write(rangeHex.getBytes());
+									baos.write(line.getBytes());
+									baos.write(CRLF);
+								}
+							}
 
-					data = baos.toByteArray();
-				} else {
-					// ServiceUnavailableRetryStrategy must have given up retrying non-200 responses
-					throw new IOException("Got non-200 response, despite retries! response: [" + httpResponse.getStatusLine().getStatusCode() + "]/[" + httpResponse.getStatusLine().getReasonPhrase() + "]");
+							data = baos.toByteArray();
+						} catch (Exception e) {
+							boolean willRetry = tryNum < 60;
+							logger.info("during try #" + tryNum + " of range " + range + " caught exception: [" + e.getClass().getName()+ "] [" + e.getMessage() + "]; " + (willRetry ? "retrying" : "giving up!"));
+							if (!willRetry) {
+								throw new IOException("Exhausted retries on range " + range, e);
+							}
+							try {
+								Thread.sleep(2000);
+							} catch (InterruptedException ie) {
+								Thread.currentThread().interrupt();
+							}
+							tryNum++;
+						}
+					} else {
+						// ServiceUnavailableRetryStrategy must have given up retrying non-200 responses
+						throw new IOException("Got non-200 response, despite retries! response: [" + httpResponse.getStatusLine().getStatusCode() + "]/[" + httpResponse.getStatusLine().getReasonPhrase() + "]");
+					}
 				}
 			}
 			logger.trace("getRangeData({}) returning {} bytes in {}ms", range, data.length, (System.currentTimeMillis() - start));
