@@ -11,7 +11,7 @@ import org.apache.logging.log4j.core.config.Configurator;
 public class App {
 	private static final Logger logger = LogManager.getLogger();
 
-	public static final String APP_VERSION = "1.1.0";
+	public static final String APP_VERSION = "1.2.0";
 
 	public static void main(String[] args) throws IOException {
 		String filePath = "pwnedpasswords.txt";
